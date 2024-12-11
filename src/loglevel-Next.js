@@ -20,6 +20,55 @@ const bindMethod = (obj, methodName) => {
 };
 
 const realMethod = (methodName) => {
+  const getCallerInfo = () => {
+    try {
+      const error = new Error();
+      const stackLines = error.stack?.split("\n");
+      // Adjust index to find the caller, skipping Error creation and this function
+      return stackLines ? stackLines[3]?.trim() : "Unknown caller";
+    } catch {
+      return "Unknown caller";
+    }
+  };
+
+  if (typeof console === undefinedType) {
+    return noop;
+  }
+
+  if (methodName === "debug") {
+    return bindMethod(console, "log");
+  }
+
+  if (methodName === "dir") {
+    return (data) => {
+      const callerInfo = getCallerInfo();
+      console.log(`Called from: ${callerInfo}`);
+      console.dir(data);
+    };
+  }
+
+  if (methodName === "table") {
+    return (data) => {
+      const callerInfo = getCallerInfo();
+      if (Array.isArray(data) || typeof data === "object") {
+        console.log(`Called from: ${callerInfo}`);
+        console.table(data);
+      } else {
+        console.log("Data is not in a suitable format for table display.");
+        console.log(`Called from: ${callerInfo}`);
+      }
+    };
+  }
+
+  if (console[methodName]) {
+    return bindMethod(console, methodName);
+  }
+
+  return bindMethod(console, "log");
+};
+
+/*
+const realMethod = (methodName) => {
   if (typeof console === undefinedType) {
     return noop;
   }
@@ -63,6 +112,7 @@ const realMethod = (methodName) => {
 
   return bindMethod(console, "log");
 };
+*/
 
 function replaceLoggingMethods() {
   if (!this.getLevel) {
