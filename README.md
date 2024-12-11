@@ -10,7 +10,7 @@ Fork created by: Tal Golan, 2024
 
 Minimal lightweight simple logging for JavaScript (browsers, node.js or elsewhere). loglevel extends `console.log()` & friends with level-based logging and filtering, with none of console's downsides.
 
-Loglevel is a barebones reliable everyday logging library. It does not do fancy things, it does not let you reconfigure appenders or add complex log filtering rules or boil tea (more's the pity), but it does have the all core functionality that you actually use:
+Loglevel is a barebones reliable everyday logging library. It does not do fancy things, it does not let you reconfigure appenders or add complex log filtering rules, but it does have the all core functionality that you actually use:
 
 ## Features
 
@@ -21,7 +21,7 @@ Loglevel is a barebones reliable everyday logging library. It does not do fancy 
   - dir
   - table
 - Filter logging by level (all the above or 'silent'), so you can disable all but error logging in production, and then run `log.setLevel("trace")` in your console to turn it all back on for a furious debugging session.
-- Single file, no dependencies, weighs in at 1.4 KB minified and gzipped.
+- Single file, no dependencies, weighs in at 3.4 KB minified and gzipped.
 
 ### Effective
 
