@@ -1,257 +1,149 @@
-("use strict");
-import * as R from "ramda";
-
-export const noop = () => {};
-const undefinedType = "undefined";
-const isIE = R.allPass([
-  () => typeof window !== undefinedType,
-  () => typeof window.navigator !== undefinedType,
-  () => /Trident\/|MSIE /.test(window.navigator.userAgent),
-])();
+/*
+ * loglevel - Modernized
+ */
 
 const logMethods = ["trace", "debug", "info", "warn", "error", "dir", "table"];
+const noop = () => {};
+const undefinedType = "undefined";
+const storageKeyPrefix = "loglevel";
 
-const bindMethod = (obj, methodName) => {
-  const method = obj[methodName];
-  if (typeof method === "function") {
-    return method.bind(obj);
-  }
-  return noop;
-};
+let defaultLogger; // Declare here to avoid circular reference
 
-const realMethod = (methodName) => {
-  const getCallerInfo = () => {
-    try {
-      const error = new Error();
-      const stackLines = error.stack?.split("\n");
-      // Adjust index to find the caller, skipping Error creation and this function
-      return stackLines ? stackLines[3]?.trim() : "Unknown caller";
-    } catch {
-      return "Unknown caller";
-    }
+function bindMethod(obj, methodName) {
+  return obj[methodName].bind(obj);
+}
+
+function createRealMethod(methodName) {
+  if (typeof console === undefinedType) return noop;
+  return bindMethod(console, methodName) || console.log.bind(console);
+}
+
+function defaultMethodFactory(methodName, _level, _loggerName) {
+  return createRealMethod(methodName);
+}
+
+function createLogger(name = null) {
+  const levels = {
+    TRACE: 0,
+    DEBUG: 1,
+    INFO: 2,
+    WARN: 3,
+    ERROR: 4,
+    SILENT: 5,
+    DIR: 6,
+    TABLE: 7,
   };
 
-  if (typeof console === undefinedType) {
-    return noop;
-  }
+  const logger = {
+    name,
+    levels,
+    methodFactory: defaultMethodFactory,
+    getLevel: () => userLevel ?? defaultLevel ?? inheritedLevel,
+    setLevel: (level, persist = true) => {
+      userLevel = normalizeLevel(level);
+      if (persist) persistLevel(userLevel);
+      replaceLoggingMethods(logger);
+    },
+    resetLevel: () => {
+      userLevel = null;
+      clearPersistedLevel();
+      replaceLoggingMethods(logger);
+    },
+    enableAll: (persist = true) => logger.setLevel(levels.TRACE, persist),
+    disableAll: (persist = true) => logger.setLevel(levels.SILENT, persist),
+  };
 
-  if (methodName === "debug") {
-    return bindMethod(console, "log");
-  }
+  let inheritedLevel = defaultLogger ? defaultLogger.getLevel() : levels.WARN;
+  let defaultLevel = null;
+  let userLevel = getPersistedLevel();
 
-  if (methodName === "dir") {
-    return (data) => {
-      const callerInfo = getCallerInfo();
-      console.log(`Called from: ${callerInfo}`);
-      console.dir(data);
-    };
-  }
+  replaceLoggingMethods(logger);
 
-  if (methodName === "table") {
-    return (data) => {
-      const callerInfo = getCallerInfo();
-      if (Array.isArray(data) || typeof data === "object") {
-        console.log(`Called from: ${callerInfo}`);
-        console.table(data);
-      } else {
-        console.log("Data is not in a suitable format for table display.");
-        console.log(`Called from: ${callerInfo}`);
-      }
-    };
-  }
+  return logger;
+}
 
-  if (console[methodName]) {
-    return bindMethod(console, methodName);
-  }
-
-  return bindMethod(console, "log");
-};
-
-/*
-const realMethod = (methodName) => {
-  if (typeof console === undefinedType) {
-    return noop;
-  }
-
-  if (methodName === "debug") {
-    return bindMethod(console, "log");
-  }
-
-  if (methodName === "dir") {
-    return (data) => {
-      console.dir(data, { depth: null }); // Ensure full depth is displayed
-    };
-  }
-
-  //   if (methodName === "dir") {
-  //     return (data) => {
-  //       if (data && typeof data === "object") {
-  //         console.log("Expanded object:");
-  //         Object.entries(data).forEach(([key, value]) => {
-  //           console.log(`${key}:`, value);
-  //         });
-  //       } else {
-  //         console.log("Data is not an object:", data);
-  //       }
-  //     };
-  //   }
-
-  if (methodName === "table") {
-    return (data) => {
-      if (Array.isArray(data) || typeof data === "object") {
-        console.table(data);
-      } else {
-        console.log("Data is not in a suitable format for table display.");
-      }
-    };
-  }
-
-  if (console[methodName]) {
-    return bindMethod(console, methodName);
-  }
-
-  return bindMethod(console, "log");
-};
-*/
-
-function replaceLoggingMethods() {
-  if (!this.getLevel) {
-    throw new Error("Logger instance has not been initialized properly.");
-  }
-
-  const level = this.getLevel();
-
+function replaceLoggingMethods(logger) {
+  const level = logger.getLevel();
   logMethods.forEach((methodName, i) => {
-    if (methodName === "dir" || methodName === "table") {
-      this[methodName] =
-        level <= this.levels.WARN
-          ? this.methodFactory(methodName, level, this.name)
-          : noop;
-    } else {
-      this[methodName] =
-        i < level || level === this.levels.SILENT
-          ? noop
-          : this.methodFactory(methodName, level, this.name);
-    }
+    logger[methodName] =
+      i < level ? noop : logger.methodFactory(methodName, level, logger.name);
   });
-
-  this.log = this.debug;
+  //logger.log = logger.debug; // Alias for `debug`
 }
 
-const defaultMethodFactory = (methodName, _level, _loggerName) =>
-  realMethod(methodName);
+function persistLevel(levelNum) {
+  try {
+    localStorage.setItem(
+      `${storageKeyPrefix}:${defaultLogger?.name || ""}`,
+      String(levelNum)
+    );
+  } catch {}
+}
 
-let defaultLoggerInstance = null;
+// function getPersistedLevel() {
+//   try {
+//     const storedLevel = localStorage.getItem(
+//       `${storageKeyPrefix}:${defaultLogger?.name || ""}`
+//     );
+//     return storedLevel ? parseInt(storedLevel, 10) : null;
+//   } catch {
+//     return null;
+//   }
+// }
 
-class Logger {
-  constructor(name, factory) {
-    this.name = name;
-    this.levels = {
-      TRACE: 0,
-      DEBUG: 1,
-      INFO: 2,
-      WARN: 3,
-      ERROR: 4,
-      SILENT: 5,
-    };
-    this.methodFactory = factory || defaultMethodFactory;
-    this.storageKey = name ? `loglevel:${name}` : "loglevel";
-    this.userLevel = null;
-    this.defaultLevel = this.levels.INFO;
-
-    this.initialize();
-  }
-
-  initialize() {
-    this.userLevel = this.getPersistedLevel();
-    replaceLoggingMethods.call(this);
-  }
-
-  normalizeLevel = R.cond([
-    [
-      (level) =>
-        typeof level === "string" &&
-        this.levels[level.toUpperCase()] !== undefined,
-      (level) => this.levels[level.toUpperCase()],
-    ],
-    [
-      (level) =>
-        typeof level === "number" && level >= 0 && level <= this.levels.SILENT,
-      R.identity,
-    ],
-    [
-      R.T,
-      () => {
-        throw new TypeError("Invalid log level");
-      },
-    ],
-  ]);
-
-  persistLevel(levelNum) {
-    if (typeof window === undefinedType || !this.storageKey) return;
-    try {
-      const value =
-        levelNum === this.levels.SILENT
-          ? "SILENT"
-          : logMethods[levelNum].toUpperCase();
-      localStorage.setItem(this.storageKey, value);
-    } catch (e) {
-      document.cookie = `${encodeURIComponent(this.storageKey)}=${value};`;
-    }
-  }
-
-  getPersistedLevel() {
-    if (typeof window === undefinedType || !this.storageKey) return undefined;
-    try {
-      const level = localStorage.getItem(this.storageKey);
-      return level ? this.levels[level.toUpperCase()] : undefined;
-    } catch (e) {
-      return undefined;
-    }
-  }
-
-  clearPersistedLevel() {
-    if (typeof window === undefinedType || !this.storageKey) return;
-
-    try {
-      localStorage.removeItem(this.storageKey);
-    } catch (e) {
-      document.cookie = `${encodeURIComponent(
-        this.storageKey
-      )}=; expires=Thu, 01 Jan 1970 00:00:00 UTC`;
-    }
-    this.userLevel = null;
-  }
-
-  getLevel() {
-    const persistedLevel = this.getPersistedLevel();
-    const level = persistedLevel ?? this.userLevel ?? this.defaultLevel;
-    return level ?? this.levels.INFO; // Explicitly fallback to INFO
-  }
-
-  setLevel(level, persist = true) {
-    const normalizedLevel = this.normalizeLevel(level);
-    this.userLevel = normalizedLevel;
-    if (persist) {
-      this.persistLevel(normalizedLevel);
-    }
-    replaceLoggingMethods.call(this);
-  }
-
-  enableAll(persist = true) {
-    this.setLevel(this.levels.TRACE, persist);
-  }
-
-  disableAll(persist = true) {
-    this.setLevel(this.levels.SILENT, persist);
+function getPersistedLevel() {
+  try {
+    const key = `${storageKeyPrefix}:${this.name || ""}`;
+    const storedLevel = localStorage.getItem(key);
+    return storedLevel ? parseInt(storedLevel, 10) : null;
+  } catch {
+    return null;
   }
 }
 
-const getDefaultLogger = () => {
-  if (!defaultLoggerInstance) {
-    defaultLoggerInstance = new Logger(null, defaultMethodFactory);
-  }
-  return defaultLoggerInstance;
-};
+// function clearPersistedLevel() {
+//   try {
+//     localStorage.removeItem(`${storageKeyPrefix}:${defaultLogger?.name || ""}`);
+//   } catch {}
+// }
 
-export default getDefaultLogger;
+function clearPersistedLevel() {
+  try {
+    const key = `${storageKeyPrefix}:${this.name || ""}`;
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+function normalizeLevel(level) {
+  if (typeof level === "string") {
+    const upperLevel = level.toUpperCase();
+    if (defaultLogger.levels[upperLevel] !== undefined) {
+      return defaultLogger.levels[upperLevel];
+    }
+  }
+  if (
+    typeof level === "number" &&
+    level >= 0 &&
+    level <= defaultLogger.levels.SILENT
+  ) {
+    return level;
+  }
+  throw new TypeError(`Invalid logging level: ${level}`);
+}
+
+defaultLogger = createLogger(); // Initialize after function definitions
+
+// Exported API
+export default defaultLogger;
+
+const loggersByName = {};
+
+export function getLogger(name) {
+  if (!name)
+    throw new TypeError("You must supply a name when creating a logger.");
+  return (loggersByName[name] ??= createLogger(name));
+}
+
+export function getLoggers() {
+  return loggersByName;
+}

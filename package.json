@@ -9,7 +9,7 @@
     "test-general": "jest src/__tests__/loglevel-Next.general.test.js",
     "test-g": "jest dist/loglevel-next.umd.js",
     "test-browser": "jest src/__tests__/loglevel-Next.browser.test.js",
-    "build": "npx vite build; yes | cp -f dist/loglevel-next.es.js tests/browser;",
+    "build": "npx vite build; yes | cp -f dist/loglevel-next.es.js tests/browser;yes | cp -f dist/loglevel-next.es.js tests/general;",
     "test:watch": "jest --watch"
   },
   "repository": {
