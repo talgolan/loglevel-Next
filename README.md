@@ -31,8 +31,7 @@ Loglevel is a barebones reliable everyday logging library. It does not do fancy 
 
 ### Convenient
 
-- Log output keeps line numbers: most JS logging frameworks call `console.log` methods through wrapper functions, clobbering your stacktrace and making the extra info many browsers provide useless. We'll have none of that thanks.
-- It works with all the standard JavaScript loading systems out of the box (CommonJS, AMD, or just as a global).
+- Log output keeps line numbers: most JS logging frameworks call `console.log` methods through wrapper functions, clobbering your stacktrace and making the extra info many browsers provide useless.
 - Logging is filtered to "warn" level by default, to keep your live site clean in normal usage (or you can trivially re-enable everything with an initial `log.enableAll()` call).
 - Magically handles situations where console logging is not initially available (IE8/9), and automatically enables logging as soon as it does become available (when developer console is opened).
 - TypeScript type definitions included, so no need for extra `@types` packages.
